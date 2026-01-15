@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>룰렛 돌리기_NEW</title>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <style>
+    /* === 1. 기본 스타일 === */
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      background-color: #1a1a1a;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    /* 브라우저 기본 포커스 아웃라인 제거 */
+    *, *::before, *::after {
+        outline: none !important;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    /* 설정 버튼 */
+    .settings-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 14px;
+      z-index: 50;
+      transition: 0.3s;
+    }
+    .settings-btn:hover { background: rgba(255, 255, 255, 0.2); }
+
+    /* === 2. 룰렛 컨테이너 === */
+    .roulette-container {
+      position: relative;
+      width: 80vmin;
+      height: 80vmin;
+      max-width: 600px;
+      max-height: 600px;
+      box-shadow: 0 0 60px rgba(0, 0, 0, 0.6);
+      border-radius: 50%;
+      user-select: none;
+    }
+
+    /* 룰렛 캔버스 (회전체) */
+    #canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 12px solid #2f3640;
+      /* transform은 JS에서 제어 */
+    }
+
+    /* 캔버스 공통 (폭죽 등 포함) */
+    canvas {
+        user-select: none;
+        pointer-events: none;
+    }
+
+    /* 화살표 (12시 방향 고정) */
+    .arrow {
+      position: absolute;
+      top: -25px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 20px solid transparent;
+      border-right: 20px solid transparent;
+      border-top: 50px solid #ff4757;
+      filter: drop-shadow(0 4px 4px rgba(0,0,0,0.5));
+      z-index: 10;
+    }
+
+    /* 중앙 GO 버튼 */
+    .center-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 18vmin;
+      height: 18vmin;
+      max-width: 120px;
+      max-height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #ff4757, #ff6b81);
+      color: white;
+      border: 6px solid #fff;
+      cursor: pointer;
+      font-weight: 900;
+      font-size: 1.5rem;
+      z-index: 15;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .center-btn:active { transform: translate(-50%, -50%) scale(0.95); }
+    .center-btn:disabled { background: #57606f; cursor: not-allowed; border-color: #a4b0be; }
+
+    /* === 3. 모달 UI === */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(5px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .modal-overlay.show { display: flex; opacity: 1; }
+
+    /* 설정 모달창 */
+    .config-modal {
+      background: #2f3640;
+      width: 90%;
+      max-width: 500px;
+      border-radius: 15px;
+      padding: 25px;
+      color: white;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+    .config-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .config-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+    .config-row input[type="text"] { flex: 2; padding: 10px; border-radius: 8px; border: none; background: #57606f; color: white; }
+    .config-row input[type="number"] { flex: 1; padding: 10px; border-radius: 8px; border: none; background: #57606f; color: white; text-align: center; }
+    .btn-icon { background: none; border: none; cursor: pointer; color: #ff6b81; font-size: 1.2rem; }
+    .btn-add { width: 100%; padding: 12px; background: #3742fa; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+    .btn-apply { width: 100%; padding: 15px; background: #2ed573; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px; font-weight: bold; font-size: 1.1rem; }
+    
+    /* 슬라이더 */
+    .slider-container { margin: 20px 0; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; }
+    .slider-container label { display: block; margin-bottom: 10px; font-size: 0.9rem; color: #ccc; }
+    input[type=range] { width: 100%; accent-color: #ff4757; }
+
+    /* 결과 모달 내용 */
+    .result-content { text-align: center; animation: popIn 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
+    .result-text { font-size: 4rem; color: #ff4757; font-weight: 900; margin: 20px 0; text-shadow: 0 0 30px rgba(255, 71, 87, 0.6); }
+    @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+  </style>
+</head>
+<body>
+
+  <button class="settings-btn" onclick="openConfig()">⚙️ 설정</button>
+
+  <div class="roulette-container">
+    <div class="arrow"></div>
+    <canvas id="canvas" width="800" height="800"></canvas>
+    <button class="center-btn" id="spinBtn" onclick="spin()">GO!</button>
+  </div>
+
+  <audio id="audio_roll" src="https://assets.mixkit.co/active_storage/sfx/2644/2644-preview.mp3"></audio>
+  <audio id="audio_win" src="https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3"></audio>
+  <audio id="audio_jackpot" src="https://assets.mixkit.co/active_storage/sfx/1997/1997-preview.mp3"></audio>
+
+  <div class="modal-overlay" id="configModal">
+    <div class="config-modal">
+      <div class="config-header">
+        <h3>🛠️ 룰렛 설정</h3>
+        <button class="btn-icon" onclick="closeConfig()">✕</button>
+      </div>
+      
+      <div id="itemsList"></div>
+      <button class="btn-add" onclick="addItemRow()">+ 항목 추가</button>
+
+      <div class="slider-container">
+        <label>회전 시간 (초): <span id="durationValue">6</span>초</label>
+        <input type="range" id="durationSlider" min="3" max="15" step="1" value="6" oninput="updateDurationLabel()">
+      </div>
+
+      <button class="btn-apply" onclick="applySettings()">적용하기</button>
+    </div>
+  </div>
+
+    <div class="modal-overlay" id="resultModal">
+    <div class="result-content">
+        <h2 id="resultTitle" style="font-size: 1.5rem; color: #ccc;">🎡 두구두구… 결과는!</h2>
+        <div class="result-text" id="resultText">?</div>
+        <button class="settings-btn" style="position:static; margin-top:20px; font-size:1.2rem; padding:10px 30px;" onclick="closeResult()">다시 돌리기</button>
+    </div>
+    </div>
+
+  <script>
+    /* === 1. 전역 변수 및 초기화 === */
+    // 기본 데이터 (로컬 스토리지 없을 경우 사용)
+    const defaultItems = [
+      { name: "A", weight: 5 },
+      { name: "B", weight: 3 },
+      { name: "C", weight: 3 },
+      { name: "D", weight: 1 },
+      { name: "E", weight: 1 }
+    ];
+
+    let items = [];
+    let spinDuration = 6; 
+    let currentRotation = 0; // 누적 회전 각도
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const spinBtn = document.getElementById('spinBtn');
+    
+    // 오디오 객체 가져오기
+    const audioRoll = document.getElementById('audio_roll');
+    const audioWin = document.getElementById('audio_win');
+    const audioJackpot = document.getElementById('audio_jackpot');
+
+    /* === 2. 로컬 스토리지 관리 (Load & Save) === */
+    function loadData() {
+      const savedData = localStorage.getItem('rouletteData');
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          items = parsed.items;
+          spinDuration = parsed.duration;
+        } catch (e) {
+          console.error("데이터 로드 실패, 기본값 사용", e);
+          items = [...defaultItems];
+        }
+      } else {
+        items = [...defaultItems];
+      }
+      // UI 업데이트
+      document.getElementById('durationSlider').value = spinDuration;
+      document.getElementById('durationValue').innerText = spinDuration;
+    }
+
+    function saveData() {
+      const data = {
+        items: items,
+        duration: spinDuration
+      };
+      localStorage.setItem('rouletteData', JSON.stringify(data));
+    }
+
+    /* === 3. 유틸리티: 색상 생성 === */
+    const getColors = (count) => {
+      const colors = [];
+      for(let i=0; i<count; i++){
+        colors.push(`hsl(${(i * 360 / count) % 360}, 75%, 60%)`);
+      }
+      return colors;
+    };
+
+    /* === 4. 캔버스 그리기 === */
+    function draw() {
+      const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+      let startAngle = -90 * (Math.PI / 180); // 12시 방향(-90도)부터 시작
+      
+      const colors = getColors(items.length);
+
+      ctx.clearRect(0, 0, 800, 800);
+
+      items.forEach((item, i) => {
+        item.color = colors[i];
+        
+        // 가중치 비중만큼 각도 할당
+        const sliceAngle = (item.weight / totalWeight) * (Math.PI * 2);
+        const endAngle = startAngle + sliceAngle;
+
+        // 부채꼴 그리기
+        ctx.beginPath();
+        ctx.moveTo(400, 400);
+        ctx.arc(400, 400, 390, startAngle, endAngle);
+        ctx.fillStyle = item.color;
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // 텍스트 (반지름 중앙에 배치)
+        ctx.save();
+        ctx.translate(400, 400);
+        ctx.rotate(startAngle + sliceAngle / 2); // 부채꼴의 정중앙 각도
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 36px Pretendard";
+        ctx.shadowColor = "rgba(0,0,0,0.5)";
+        ctx.shadowBlur = 5;
+        ctx.fillText(item.name, 360, 10);
+        ctx.restore();
+
+        startAngle = endAngle; // 다음 시작 각도 업데이트
+      });
+    }
+
+    /* === 5. 룰렛 돌리기 로직 (핵심 수정) === */
+    function spin() {
+      if (items.length < 2) {
+        alert("최소 2개 이상의 항목이 필요합니다!");
+        return;
+      }
+      spinBtn.disabled = true;
+
+      // 5-1. 당첨 항목 미리 선정 (가중치 랜덤)
+      const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+      let randomVal = Math.random() * totalWeight;
+      let winnerIndex = 0;
+
+      for (let i = 0; i < items.length; i++) {
+        randomVal -= items[i].weight;
+        if (randomVal <= 0) {
+          winnerIndex = i;
+          break;
+        }
+      }
+      const winner = items[winnerIndex];
+
+      // 5-2. [수정됨] 각도 계산 로직
+      // 목표: 당첨된 항목의 "중간 지점"이 정확히 12시(화살표)에 오도록 회전해야 함.
+      
+      // 당첨 항목의 시작/끝 각도(Degree) 구하기 (0도 = 12시 기준)
+      let angleSum = 0;
+      let winnerStart = 0;
+      let winnerEnd = 0;
+      
+      // items를 순회하며 winner의 각도 범위 찾기
+      for (let i = 0; i < items.length; i++) {
+        const sliceDeg = (items[i].weight / totalWeight) * 360;
+        if (i === winnerIndex) {
+          winnerStart = angleSum;
+          winnerEnd = angleSum + sliceDeg;
+        }
+        angleSum += sliceDeg;
+      }
+
+      // 당첨 영역 안의 랜덤 위치 (경계선 제외하고 안쪽으로 약간 여유)
+      const targetDeg = winnerStart + Math.random() * (winnerEnd - winnerStart - 2) + 1;
+      
+      // 중요: 캔버스를 'targetDeg' 만큼 돌리면 해당 지점이 3시 방향(Canvas 0도)으로 감.
+      // 하지만 우리는 12시(-90도)에서 그림을 시작했음.
+      // 또한 CSS rotate는 시계방향(+)임.
+      
+      // 계산 단순화:
+      // "현재 0도(12시)에 있는 지점"을 기준으로, targetDeg 만큼 시계방향에 있는 놈을 12시로 데려오려면?
+      // 반시계 방향으로 targetDeg 만큼 돌려야 함 (-targetDeg).
+      // 혹은 시계 방향으로 (360 - targetDeg) 만큼 돌려야 함.
+      
+      // 최종 회전 각도 = (기존 회전값) + (최소 5바퀴 이상) + (위치 보정값)
+      // 위치 보정값 = (360 - targetDeg)
+      
+      const defaultSpins = 360 * 5; // 최소 5바퀴
+      
+      // 현재 회전 상태에서 360으로 나눈 나머지를 제거하여 0점 조절 후 회전 추가
+      // 이렇게 하면 매번 정확한 계산이 가능함
+      const currentMod = currentRotation % 360;
+      const resetToZero = 360 - currentMod; // 현재 위치에서 0도(정방향)로 맞추는 값
+      
+      const finalRotation = currentRotation + resetToZero + defaultSpins + (360 - targetDeg);
+      
+      currentRotation = finalRotation; // 상태 업데이트
+
+      // 5-3. 애니메이션 실행
+      canvas.style.transition = `transform ${spinDuration}s cubic-bezier(0.1, 0, 0, 1)`;
+      canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+      // 사운드 재생
+      audioRoll.currentTime = 0;
+      audioRoll.play();
+
+      // 결과 표시 타이머
+      setTimeout(() => {
+        audioRoll.pause();
+        showResult(winner, totalWeight);
+      }, spinDuration * 1000);
+    }
+
+    /* === 6. 결과 처리 및 사운드 제어 (수정됨) === */
+    function showResult(winner, totalWeight) {
+        const winProbability = (winner.weight / totalWeight) * 100;
+        const resultTitle = document.getElementById('resultTitle');
+        const resultText = document.getElementById('resultText');
+        const resultModal = document.getElementById('resultModal');
+        
+        // 1. 결과 텍스트 설정
+        resultText.innerText = winner.name;
+        resultModal.classList.add('show');
+
+        // 2. 확률에 따른 문구 데이터베이스
+        const jackpotMessages = [
+        "OMG!!! 대박 사건!! 🎉",
+        "이게 진짜 걸린다고?! 😱",
+        "와!!! 당신의 운, 오늘 몰빵인가요? ✨",
+        "미쳤다! 역대급 확률을 뚫었습니다! 🔥",
+        "전생에 나라를 구하셨군요! 🏆",
+        "대.박.당.첨! 소리 질러~~!!! 📢"
+        ];
+
+        const normalMessages = [
+        "와아~ 너무 잘 나왔어요 🌈",
+        "이 정도면 운이 따라준 날이죠 😎",
+        "결과는 바로... ✨",
+        "이건 조금 자랑해도 돼요 😆",
+        "오! 오늘 운이 꽤 좋은데요? 😊",
+        ];
+
+        // 3. 확률 기반 연출 분기
+        if (winProbability <= 15) { 
+        // [호들갑 연출]
+        const randomJackpot = jackpotMessages[Math.floor(Math.random() * jackpotMessages.length)];
+        resultTitle.innerText = randomJackpot;
+        resultTitle.style.color = "#ffbe76"; // 황금색 계열로 강조
+        
+        audioJackpot.currentTime = 0;
+        audioJackpot.play();
+        fireConfetti();
+        
+        setTimeout(() => { audioJackpot.pause(); }, 3000);
+        } else {
+        // [일반 연출]
+        const randomNormal = normalMessages[Math.floor(Math.random() * normalMessages.length)];
+        resultTitle.innerText = randomNormal;
+        resultTitle.style.color = "#ccc";
+        
+        audioWin.currentTime = 0;
+        audioWin.play();
+        }
+        
+        spinBtn.disabled = false;
+    }
+
+    function fireConfetti() {
+      var duration = 3 * 1000; // 3초
+      var animationEnd = Date.now() + duration;
+      var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 999 };
+
+      function randomInRange(min, max) {
+        return Math.random() * (max - min) + min;
+      }
+
+      var interval = setInterval(function() {
+        var timeLeft = animationEnd - Date.now();
+        
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+        
+        var particleCount = 50 * (timeLeft / duration);
+        confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+        confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+      }, 250);
+    }
+
+    function closeResult() {
+        document.getElementById('resultModal').classList.remove('show');
+        setTimeout(() => {
+            document.getElementById('resultTitle').innerText = "🎡 두구두구… 결과는!";
+            document.getElementById('resultTitle').style.color = "#ccc";
+        }, 300);
+    }
+
+    /* === 7. 설정 모달 로직 === */
+    const configModal = document.getElementById('configModal');
+    const itemsList = document.getElementById('itemsList');
+    const durationSlider = document.getElementById('durationSlider');
+    const durationValue = document.getElementById('durationValue');
+
+    function openConfig() {
+      itemsList.innerHTML = '';
+      items.forEach((item) => {
+        const div = document.createElement('div');
+        div.className = 'config-row';
+        div.innerHTML = `
+          <input type="text" value="${item.name}" placeholder="항목 이름">
+          <input type="number" value="${item.weight}" min="1" placeholder="가중치">
+          <button class="btn-icon" onclick="deleteItemRow(this)">🗑️</button>
+        `;
+        itemsList.appendChild(div);
+      });
+      durationSlider.value = spinDuration;
+      durationValue.innerText = spinDuration;
+      configModal.classList.add('show');
+    }
+
+    function closeConfig() {
+      configModal.classList.remove('show');
+    }
+
+    function updateDurationLabel() {
+      durationValue.innerText = durationSlider.value;
+    }
+
+    function addItemRow() {
+      const div = document.createElement('div');
+      div.className = 'config-row';
+      div.innerHTML = `
+        <input type="text" value="" placeholder="새 항목">
+        <input type="number" value="1" min="1" placeholder="가중치">
+        <button class="btn-icon" onclick="deleteItemRow(this)">🗑️</button>
+      `;
+      itemsList.appendChild(div);
+      setTimeout(() => {
+        document.querySelector('.config-modal').scrollTop = document.querySelector('.config-modal').scrollHeight;
+      }, 50);
+    }
+
+    function deleteItemRow(btn) {
+      if (document.querySelectorAll('.config-row').length <= 2) {
+        alert('최소 2개의 항목은 있어야 합니다!');
+        return;
+      }
+      btn.parentElement.remove();
+    }
+
+    function applySettings() {
+      const rows = document.querySelectorAll('.config-row');
+      const newItems = [];
+      
+      rows.forEach(row => {
+        const inputs = row.querySelectorAll('input');
+        const name = inputs[0].value.trim();
+        const weight = parseInt(inputs[1].value);
+        if(name && weight > 0) {
+          newItems.push({ name, weight }); // color는 draw에서 자동생성하므로 저장 안함
+        }
+      });
+
+      if (newItems.length < 2) {
+        alert('유효한 항목이 2개 이상 필요합니다.');
+        return;
+      }
+
+      items = newItems;
+      spinDuration = parseInt(durationSlider.value);
+      
+      saveData(); // [수정됨] 설정 적용 시 로컬 스토리지 저장
+      closeConfig();
+      draw();
+    }
+
+    /* === 8. 초기 실행 === */
+    loadData(); // 데이터 불러오기
+    draw();     // 그리기
+
+  </script>
+</body>
+</html>
