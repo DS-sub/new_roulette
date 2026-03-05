@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>룰렛 돌리기_NEW</title>
+  <title>룰렛 돌리기_NEW (비밀 확률)</title>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <style>
     /* === 1. 기본 스타일 === */
@@ -173,7 +173,7 @@
   <div class="modal-overlay" id="configModal">
     <div class="config-modal">
       <div class="config-header">
-        <h3>🛠️ 룰렛 설정</h3>
+        <h3>🛠️ 룰렛 설정 (확률은 비밀!)</h3>
         <button class="btn-icon" onclick="closeConfig()">✕</button>
       </div>
       
@@ -199,7 +199,6 @@
 
   <script>
     /* === 1. 전역 변수 및 초기화 === */
-    // 기본 데이터 (로컬 스토리지 없을 경우 사용)
     const defaultItems = [
       { name: "A", weight: 5 },
       { name: "B", weight: 3 },
@@ -210,18 +209,16 @@
 
     let items = [];
     let spinDuration = 6; 
-    let currentRotation = 0; // 누적 회전 각도
+    let currentRotation = 0; 
 
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const spinBtn = document.getElementById('spinBtn');
     
-    // 오디오 객체 가져오기
     const audioRoll = document.getElementById('audio_roll');
-    const audioWin = document.getElementById('audio_win');
-    const audioJackpot = document.getElementById('audio_jackpot');
+    const audioJackpot = document.getElementById('audio_jackpot'); // 오디오 변수 정리
 
-    /* === 2. 로컬 스토리지 관리 (Load & Save) === */
+    /* === 2. 로컬 스토리지 관리 === */
     function loadData() {
       const savedData = localStorage.getItem('rouletteData');
       if (savedData) {
@@ -230,22 +227,17 @@
           items = parsed.items;
           spinDuration = parsed.duration;
         } catch (e) {
-          console.error("데이터 로드 실패, 기본값 사용", e);
           items = [...defaultItems];
         }
       } else {
         items = [...defaultItems];
       }
-      // UI 업데이트
       document.getElementById('durationSlider').value = spinDuration;
       document.getElementById('durationValue').innerText = spinDuration;
     }
 
     function saveData() {
-      const data = {
-        items: items,
-        duration: spinDuration
-      };
+      const data = { items: items, duration: spinDuration };
       localStorage.setItem('rouletteData', JSON.stringify(data));
     }
 
@@ -258,23 +250,21 @@
       return colors;
     };
 
-    /* === 4. 캔버스 그리기 === */
+    /* === 4. 캔버스 그리기 (무조건 동일한 크기로 그림) === */
     function draw() {
-      const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
-      let startAngle = -90 * (Math.PI / 180); // 12시 방향(-90도)부터 시작
-      
+      let startAngle = -90 * (Math.PI / 180); // 12시 방향부터 시작
       const colors = getColors(items.length);
+
+      // 시각적으로 모든 칸의 크기를 동일하게 만듭니다.
+      const visualSliceAngle = (Math.PI * 2) / items.length;
 
       ctx.clearRect(0, 0, 800, 800);
 
       items.forEach((item, i) => {
         item.color = colors[i];
         
-        // 가중치 비중만큼 각도 할당
-        const sliceAngle = (item.weight / totalWeight) * (Math.PI * 2);
-        const endAngle = startAngle + sliceAngle;
+        const endAngle = startAngle + visualSliceAngle;
 
-        // 부채꼴 그리기
         ctx.beginPath();
         ctx.moveTo(400, 400);
         ctx.arc(400, 400, 390, startAngle, endAngle);
@@ -284,10 +274,9 @@
         ctx.lineWidth = 4;
         ctx.stroke();
 
-        // 텍스트 (반지름 중앙에 배치)
         ctx.save();
         ctx.translate(400, 400);
-        ctx.rotate(startAngle + sliceAngle / 2); // 부채꼴의 정중앙 각도
+        ctx.rotate(startAngle + visualSliceAngle / 2);
         ctx.textAlign = "right";
         ctx.fillStyle = "#fff";
         ctx.font = "bold 36px Pretendard";
@@ -296,11 +285,11 @@
         ctx.fillText(item.name, 360, 10);
         ctx.restore();
 
-        startAngle = endAngle; // 다음 시작 각도 업데이트
+        startAngle = endAngle; 
       });
     }
 
-    /* === 5. 룰렛 돌리기 로직 (핵심 수정) === */
+    /* === 5. 룰렛 돌리기 로직 === */
     function spin() {
       if (items.length < 2) {
         alert("최소 2개 이상의 항목이 필요합니다!");
@@ -308,7 +297,7 @@
       }
       spinBtn.disabled = true;
 
-      // 5-1. 당첨 항목 미리 선정 (가중치 랜덤)
+      // 5-1. 당첨 항목 미리 선정 (실제 확률은 가중치를 따름)
       const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
       let randomVal = Math.random() * totalWeight;
       let winnerIndex = 0;
@@ -322,121 +311,69 @@
       }
       const winner = items[winnerIndex];
 
-      // 5-2. [수정됨] 각도 계산 로직
-      // 목표: 당첨된 항목의 "중간 지점"이 정확히 12시(화살표)에 오도록 회전해야 함.
-      
-      // 당첨 항목의 시작/끝 각도(Degree) 구하기 (0도 = 12시 기준)
-      let angleSum = 0;
-      let winnerStart = 0;
-      let winnerEnd = 0;
-      
-      // items를 순회하며 winner의 각도 범위 찾기
-      for (let i = 0; i < items.length; i++) {
-        const sliceDeg = (items[i].weight / totalWeight) * 360;
-        if (i === winnerIndex) {
-          winnerStart = angleSum;
-          winnerEnd = angleSum + sliceDeg;
-        }
-        angleSum += sliceDeg;
-      }
+      // 5-2. 회전 각도 계산
+      const visualSliceDeg = 360 / items.length;
+      const winnerStart = winnerIndex * visualSliceDeg;
+      const winnerEnd = winnerStart + visualSliceDeg;
 
-      // 당첨 영역 안의 랜덤 위치 (경계선 제외하고 안쪽으로 약간 여유)
+      // 당첨된 균일한 칸 안의 랜덤 위치
       const targetDeg = winnerStart + Math.random() * (winnerEnd - winnerStart - 2) + 1;
       
-      // 중요: 캔버스를 'targetDeg' 만큼 돌리면 해당 지점이 3시 방향(Canvas 0도)으로 감.
-      // 하지만 우리는 12시(-90도)에서 그림을 시작했음.
-      // 또한 CSS rotate는 시계방향(+)임.
-      
-      // 계산 단순화:
-      // "현재 0도(12시)에 있는 지점"을 기준으로, targetDeg 만큼 시계방향에 있는 놈을 12시로 데려오려면?
-      // 반시계 방향으로 targetDeg 만큼 돌려야 함 (-targetDeg).
-      // 혹은 시계 방향으로 (360 - targetDeg) 만큼 돌려야 함.
-      
-      // 최종 회전 각도 = (기존 회전값) + (최소 5바퀴 이상) + (위치 보정값)
-      // 위치 보정값 = (360 - targetDeg)
-      
-      const defaultSpins = 360 * 5; // 최소 5바퀴
-      
-      // 현재 회전 상태에서 360으로 나눈 나머지를 제거하여 0점 조절 후 회전 추가
-      // 이렇게 하면 매번 정확한 계산이 가능함
+      const defaultSpins = 360 * 5; 
       const currentMod = currentRotation % 360;
-      const resetToZero = 360 - currentMod; // 현재 위치에서 0도(정방향)로 맞추는 값
+      const resetToZero = 360 - currentMod; 
       
       const finalRotation = currentRotation + resetToZero + defaultSpins + (360 - targetDeg);
       
-      currentRotation = finalRotation; // 상태 업데이트
+      currentRotation = finalRotation;
 
       // 5-3. 애니메이션 실행
       canvas.style.transition = `transform ${spinDuration}s cubic-bezier(0.1, 0, 0, 1)`;
       canvas.style.transform = `rotate(${currentRotation}deg)`;
 
-      // 사운드 재생
       audioRoll.currentTime = 0;
       audioRoll.play();
 
-      // 결과 표시 타이머
       setTimeout(() => {
         audioRoll.pause();
-        showResult(winner, totalWeight);
+        showResult(winner);
       }, spinDuration * 1000);
     }
 
-    /* === 6. 결과 처리 및 사운드 제어 (수정됨) === */
-    function showResult(winner, totalWeight) {
-        const winProbability = (winner.weight / totalWeight) * 100;
+    /* === 6. 결과 처리 및 사운드 제어 (수정됨: 무조건 폭죽!) === */
+    function showResult(winner) {
         const resultTitle = document.getElementById('resultTitle');
         const resultText = document.getElementById('resultText');
         const resultModal = document.getElementById('resultModal');
         
-        // 1. 결과 텍스트 설정
         resultText.innerText = winner.name;
         resultModal.classList.add('show');
 
-        // 2. 확률에 따른 문구 데이터베이스
-        const jackpotMessages = [
-        "OMG!!! 대박 사건!! 🎉",
-        "이게 진짜 걸린다고?! 😱",
-        "와!!! 당신의 운, 오늘 몰빵인가요? ✨",
-        "미쳤다! 역대급 확률을 뚫었습니다! 🔥",
-        "전생에 나라를 구하셨군요! 🏆",
-        "대.박.당.첨! 소리 질러~~!!! 📢"
+        // 모든 결과에 대해 기분 좋은 멘트 랜덤 출력
+        const happyMessages = [
+            "와아~ 너무 잘 나왔어요 🌈",
+            "이 정도면 운이 따라준 날이죠 😎",
+            "결과는 바로... ✨",
+            "이건 조금 자랑해도 돼요 😆",
+            "오! 오늘 운이 꽤 좋은데요? 😊"
         ];
 
-        const normalMessages = [
-        "와아~ 너무 잘 나왔어요 🌈",
-        "이 정도면 운이 따라준 날이죠 😎",
-        "결과는 바로... ✨",
-        "이건 조금 자랑해도 돼요 😆",
-        "오! 오늘 운이 꽤 좋은데요? 😊",
-        ];
-
-        // 3. 확률 기반 연출 분기
-        if (winProbability <= 15) { 
-        // [호들갑 연출]
-        const randomJackpot = jackpotMessages[Math.floor(Math.random() * jackpotMessages.length)];
-        resultTitle.innerText = randomJackpot;
+        const randomMessage = happyMessages[Math.floor(Math.random() * happyMessages.length)];
+        resultTitle.innerText = randomMessage;
         resultTitle.style.color = "#ffbe76"; // 황금색 계열로 강조
         
+        // 무조건 폭죽 & 잭팟 사운드 재생
         audioJackpot.currentTime = 0;
         audioJackpot.play();
         fireConfetti();
         
         setTimeout(() => { audioJackpot.pause(); }, 3000);
-        } else {
-        // [일반 연출]
-        const randomNormal = normalMessages[Math.floor(Math.random() * normalMessages.length)];
-        resultTitle.innerText = randomNormal;
-        resultTitle.style.color = "#ccc";
-        
-        audioWin.currentTime = 0;
-        audioWin.play();
-        }
         
         spinBtn.disabled = false;
     }
 
     function fireConfetti() {
-      var duration = 3 * 1000; // 3초
+      var duration = 3 * 1000;
       var animationEnd = Date.now() + duration;
       var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 999 };
 
@@ -446,11 +383,9 @@
 
       var interval = setInterval(function() {
         var timeLeft = animationEnd - Date.now();
-        
         if (timeLeft <= 0) {
           return clearInterval(interval);
         }
-        
         var particleCount = 50 * (timeLeft / duration);
         confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
         confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
@@ -478,7 +413,7 @@
         div.className = 'config-row';
         div.innerHTML = `
           <input type="text" value="${item.name}" placeholder="항목 이름">
-          <input type="number" value="${item.weight}" min="1" placeholder="가중치">
+          <input type="number" value="${item.weight}" min="1" placeholder="숨은 확률(가중치)">
           <button class="btn-icon" onclick="deleteItemRow(this)">🗑️</button>
         `;
         itemsList.appendChild(div);
@@ -501,7 +436,7 @@
       div.className = 'config-row';
       div.innerHTML = `
         <input type="text" value="" placeholder="새 항목">
-        <input type="number" value="1" min="1" placeholder="가중치">
+        <input type="number" value="1" min="1" placeholder="숨은 확률(가중치)">
         <button class="btn-icon" onclick="deleteItemRow(this)">🗑️</button>
       `;
       itemsList.appendChild(div);
@@ -527,7 +462,7 @@
         const name = inputs[0].value.trim();
         const weight = parseInt(inputs[1].value);
         if(name && weight > 0) {
-          newItems.push({ name, weight }); // color는 draw에서 자동생성하므로 저장 안함
+          newItems.push({ name, weight }); 
         }
       });
 
@@ -539,14 +474,14 @@
       items = newItems;
       spinDuration = parseInt(durationSlider.value);
       
-      saveData(); // [수정됨] 설정 적용 시 로컬 스토리지 저장
+      saveData();
       closeConfig();
       draw();
     }
 
     /* === 8. 초기 실행 === */
-    loadData(); // 데이터 불러오기
-    draw();     // 그리기
+    loadData(); 
+    draw();     
 
   </script>
 </body>
