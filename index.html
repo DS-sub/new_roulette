@@ -189,13 +189,12 @@
     </div>
   </div>
 
-    <div class="modal-overlay" id="resultModal">
+  <div class="modal-overlay" id="resultModal">
     <div class="result-content">
         <h2 id="resultTitle" style="font-size: 1.5rem; color: #ccc;">🎡 두구두구… 결과는!</h2>
         <div class="result-text" id="resultText">?</div>
-        <button class="settings-btn" style="position:static; margin-top:20px; font-size:1.2rem; padding:10px 30px;" onclick="closeResult()">다시 돌리기</button>
-    </div>
-    </div>
+        </div>
+  </div>
 
   <script>
     /* === 1. 전역 변수 및 초기화 === */
@@ -216,7 +215,7 @@
     const spinBtn = document.getElementById('spinBtn');
     
     const audioRoll = document.getElementById('audio_roll');
-    const audioJackpot = document.getElementById('audio_jackpot'); // 오디오 변수 정리
+    const audioJackpot = document.getElementById('audio_jackpot');
 
     /* === 2. 로컬 스토리지 관리 === */
     function loadData() {
@@ -250,12 +249,10 @@
       return colors;
     };
 
-    /* === 4. 캔버스 그리기 (무조건 동일한 크기로 그림) === */
+    /* === 4. 캔버스 그리기 === */
     function draw() {
-      let startAngle = -90 * (Math.PI / 180); // 12시 방향부터 시작
+      let startAngle = -90 * (Math.PI / 180); 
       const colors = getColors(items.length);
-
-      // 시각적으로 모든 칸의 크기를 동일하게 만듭니다.
       const visualSliceAngle = (Math.PI * 2) / items.length;
 
       ctx.clearRect(0, 0, 800, 800);
@@ -297,7 +294,6 @@
       }
       spinBtn.disabled = true;
 
-      // 5-1. 당첨 항목 미리 선정 (실제 확률은 가중치를 따름)
       const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
       let randomVal = Math.random() * totalWeight;
       let winnerIndex = 0;
@@ -311,12 +307,10 @@
       }
       const winner = items[winnerIndex];
 
-      // 5-2. 회전 각도 계산
       const visualSliceDeg = 360 / items.length;
       const winnerStart = winnerIndex * visualSliceDeg;
       const winnerEnd = winnerStart + visualSliceDeg;
 
-      // 당첨된 균일한 칸 안의 랜덤 위치
       const targetDeg = winnerStart + Math.random() * (winnerEnd - winnerStart - 2) + 1;
       
       const defaultSpins = 360 * 5; 
@@ -327,7 +321,6 @@
       
       currentRotation = finalRotation;
 
-      // 5-3. 애니메이션 실행
       canvas.style.transition = `transform ${spinDuration}s cubic-bezier(0.1, 0, 0, 1)`;
       canvas.style.transform = `rotate(${currentRotation}deg)`;
 
@@ -340,7 +333,7 @@
       }, spinDuration * 1000);
     }
 
-    /* === 6. 결과 처리 및 사운드 제어 (수정됨: 무조건 폭죽!) === */
+    /* === 6. 결과 처리 및 사운드 제어 === */
     function showResult(winner) {
         const resultTitle = document.getElementById('resultTitle');
         const resultText = document.getElementById('resultText');
@@ -349,7 +342,6 @@
         resultText.innerText = winner.name;
         resultModal.classList.add('show');
 
-        // 모든 결과에 대해 기분 좋은 멘트 랜덤 출력
         const happyMessages = [
             "와아~ 너무 잘 나왔어요 🌈",
             "이 정도면 운이 따라준 날이죠 😎",
@@ -360,15 +352,19 @@
 
         const randomMessage = happyMessages[Math.floor(Math.random() * happyMessages.length)];
         resultTitle.innerText = randomMessage;
-        resultTitle.style.color = "#ffbe76"; // 황금색 계열로 강조
+        resultTitle.style.color = "#ffbe76"; 
         
-        // 무조건 폭죽 & 잭팟 사운드 재생
         audioJackpot.currentTime = 0;
         audioJackpot.play();
         fireConfetti();
         
         setTimeout(() => { audioJackpot.pause(); }, 3000);
         
+        // 추가: 2초 뒤에 결과 모달창 자동 닫기
+        setTimeout(() => {
+            closeResult();
+        }, 2000);
+
         spinBtn.disabled = false;
     }
 
